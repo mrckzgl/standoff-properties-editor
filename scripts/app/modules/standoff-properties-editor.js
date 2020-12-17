@@ -7,7 +7,8 @@
 
     const TEXT_STREAM = {
         IN: 0,
-        OUT: 1
+        OUT: 1,
+        IGNORE: 2
     };
     const ELEMENT_ROLE = {
         CHAR: 0,
@@ -36,9 +37,9 @@
         DELETE = 46, HOME = 36, END = 35, INSERT = 45, PRINT_SCREEN = 44, PAUSE = 19, SELECT_KEY = 93, NUM_LOCK = 144,
         LEFT_ARROW = 37, RIGHT_ARROW = 39, UP_ARROW = 38, DOWN_ARROW = 40, SPACE = 32, ESCAPE = 27,
         SHIFT = 16, CTRL = 17, ALT = 18, ENTER = 13, LINE_FEED = 10, TAB = 9, LEFT_WINDOW_KEY = 91, SCROLL_LOCK = 145,
-        RIGHT_WINDOW_KEY = 92, F1 = 112;
+        RIGHT_WINDOW_KEY = 92, F1 = 112, PROCESS = 229;
 
-    const PASSTHROUGH_CHARS = [CAPSLOCK, PAGE_UP, PAGE_DOWN, HOME, END, PRINT_SCREEN, PAUSE, SELECT_KEY, NUM_LOCK, SCROLL_LOCK, LEFT_WINDOW_KEY, RIGHT_WINDOW_KEY, UP_ARROW, DOWN_ARROW, SHIFT, ALT];
+    const PASSTHROUGH_CHARS = [CTRL, PROCESS, CAPSLOCK, PAGE_UP, PAGE_DOWN, HOME, END, PRINT_SCREEN, PAUSE, SELECT_KEY, NUM_LOCK, SCROLL_LOCK, LEFT_WINDOW_KEY, RIGHT_WINDOW_KEY, UP_ARROW, DOWN_ARROW, SHIFT, ALT];
 
     function hasProperties(obj) {
         if (!obj) {
@@ -68,7 +69,7 @@
         var s = startNode, loop = true;
         var c = 0;
         while (loop) {
-            console.log({ c, s });
+            //console.log({ c, s });
             if (func(s)) {
                 return s;
             }
@@ -1073,6 +1074,7 @@
             this.container.addEventListener("keydown", this.handleKeyDownEvent.bind(this));
             this.container.addEventListener("mouseup", this.handleMouseUpEvent.bind(this));
             this.container.addEventListener("paste", this.handleOnPasteEvent.bind(this));
+            /*
             this.container.addEventListener("contextmenu", e => {
                 e.preventDefault();
                 const origin = {
@@ -1085,6 +1087,7 @@
                 }
                 return false;
             });
+            */
             window.addEventListener("click", e => {
                 if (_this.mode.contextMenu.active) {
                     if (_this.event.contextMenuDeactivated) {
@@ -1100,7 +1103,7 @@
                 if (!properties.length) {
                     return;
                 }
-                console.log({ method: "requestAnimationFrame", properties })
+                //console.log({ method: "requestAnimationFrame", properties })
                 properties.forEach(p => _this.propertyType[p.type].onRequestAnimationFrame(p, _this.propertyType[p.type], _this));
             });
         };
@@ -1242,19 +1245,22 @@
         Editor.prototype.handleMouseClickEvent = function (evt) {
             this.updateCurrentRanges();
         };
-        Editor.prototype.updateSelectors = function (evt) {
+        Editor.prototype.updateSelectors = function () {
             var selection = this.getSelectionNodes();
             if (selection) {
                 this.mode.selection.start = selection.start;
                 this.mode.selection.end = selection.end;
                 var properties = this.getPropertiesWithin(selection.start, selection.end);
-                console.log({ evt, selection, properties });
+                //console.log({ evt, selection, properties });
                 if (this.selectors) {
                     this.selectors.forEach(s => s({ editor: this, properties, selection }));
                 }
             } else {
                 this.mode.selection.start = null;
                 this.mode.selection.end = null;
+                if (this.selectors) {
+                    this.selectors.forEach(s => s({ editor: this, selection }));
+                }
             }
         };
         Editor.prototype.handleMouseUpEvent = function (evt) {
@@ -1262,7 +1268,7 @@
                 return;
             }
             this.updateCurrentRanges(evt.target);
-            this.updateSelectors(evt);
+            this.updateSelectors();
             var props = this.getCurrentRanges(evt.target);
             if (props) {
                 props.forEach(p => {
@@ -1293,7 +1299,7 @@
                 return;
             }
             this.moveCursorTo(this.history.cursor[this.history.cursorIndex]);
-            console.log(this.history.cursor[this.history.cursorIndex]);
+            //console.log(this.history.cursor[this.history.cursorIndex]);
         };
         Editor.prototype.forwardCursor = function () {
             this.history.cursorIndex++;
@@ -1301,7 +1307,7 @@
                 return;
             }
             this.moveCursorTo(this.history.cursor[this.history.cursorIndex]);
-            console.log(this.history.cursor[this.history.cursorIndex]);
+            //console.log(this.history.cursor[this.history.cursorIndex]);
         };
         Editor.prototype.moveCursorTo = function (span) {
             span.scrollIntoView();
@@ -1309,6 +1315,7 @@
         };
         // https://stackoverflow.com/questions/2176861/javascript-get-clipboard-data-on-paste-event-cross-browser
         Editor.prototype.handleOnPasteEvent = function (e) {
+            var caretSpan = this.getCurrent();
             var _this = this;
             e.stopPropagation();
             e.preventDefault();
@@ -1316,14 +1323,15 @@
             var text = clipboardData.getData('text');
             var len = text.length;
             var frag = this.textToDocumentFragment(text);
+            var lastInsertedSpan = frag.lastChild;
             if (this.container.children.length) {
-                this.container.insertBefore(frag, e.target.nextElementSibling);
+                this.container.insertBefore(frag, caretSpan.nextElementSibling);
             } else {
                 this.container.appendChild(frag);
             }
             if (this.onCharacterAdded) {
-                var start = e.target;
-                var end = e.target;
+                var start = caretSpan;
+                var end = caretSpan;
                 while (len--) {
                     end = this.getNextCharacterNode(end);
                 }
@@ -1332,7 +1340,7 @@
                 });
             }
             this.marked = false;
-            this.setCarotByNode(e.target);
+            this.setCarotByNode(lastInsertedSpan);
             this.updateCurrentRanges();
         };
         Editor.prototype.insertCharacterAtCarot = function (c) {
@@ -1412,51 +1420,53 @@
             var _ = this;
             var previous = firstPreviousCharOrLineBreak(current);
             var next = firstNextCharOrLineBreak(current); // this.getNextCharacterNode(current);
-            console.log({ current, previous, next });
+            //console.log({ current, previous, next });
             if (!previous) {
                 return;
             }
-            var outOfStream = (current.speedy.stream == TEXT_STREAM.OUT);
-            if (outOfStream) {
-                current.startProperties[0].remove();
-                current.style.display = "none";
-                if (updateCarot && previous) {
-                    this.setCarotByNode(previous);
-                }
-                return;
+            if(current && current.speedy.stream !== TEXT_STREAM.IGNORE) {
+              var outOfStream = (current.speedy.stream == TEXT_STREAM.OUT);
+              if (outOfStream) {
+                  current.startProperties[0].remove();
+                  current.style.display = "none";
+                  if (updateCarot && previous) {
+                      this.setCarotByNode(previous);
+                  }
+                  return;
+              }
+              if (current) {
+                  if (current.startProperties.length) {
+                      current.startProperties.forEach(function (prop) {
+                          prop.startNode = next;
+                          if (next) {
+                              next.startProperties.push(prop);
+                          }
+                      });
+                      current.startProperties.length = 0;
+                  }
+                  if (current.endProperties.length) {
+                      current.endProperties.forEach(function (prop) {
+                          prop.endNode = previous;
+                          if (previous) {
+                              previous.endProperties.push(prop);
+                          }
+                      });
+                      current.endProperties.length = 0;
+                  }
+              }
+              if (previous) {
+                  if (previous.endProperties.length) {
+                      previous.endProperties
+                          .filter(function (ep) { return ep.startNode == next && ep.endNode == previous; })
+                          .forEach(function (single) { remove(_.data.properties, single); });
+                  }
+              }
+              current.remove();
+              //var leftOfPrevious = firstPreviousCharOrLineBreak(previous);
+              //if (previous) {
+              //    previous.remove();
+              //}
             }
-            if (current) {
-                if (current.startProperties.length) {
-                    current.startProperties.forEach(function (prop) {
-                        prop.startNode = next;
-                        if (next) {
-                            next.startProperties.push(prop);
-                        }
-                    });
-                    current.startProperties.length = 0;
-                }
-                if (current.endProperties.length) {
-                    current.endProperties.forEach(function (prop) {
-                        prop.endNode = previous;
-                        if (previous) {
-                            previous.endProperties.push(prop);
-                        }
-                    });
-                    current.endProperties.length = 0;
-                }
-            }
-            if (previous) {
-                if (previous.endProperties.length) {
-                    previous.endProperties
-                        .filter(function (ep) { return ep.startNode == next && ep.endNode == previous; })
-                        .forEach(function (single) { remove(_.data.properties, single); });
-                }
-            }
-            current.remove();
-            //var leftOfPrevious = firstPreviousCharOrLineBreak(previous);
-            //if (previous) {
-            //    previous.remove();
-            //}
             if (updateCarot) {
                 if (previous) {
                     this.setCarotByNode(previous);
@@ -1468,8 +1478,10 @@
             if (!next) {
                 return;
             }
+            if(current && current.speedy.stream !== TEXT_STREAM.IGNORE) {
+
             var previous = firstPreviousCharOrLineBreak(current);
-            console.log({ current, previous, next });
+            //console.log({ current, previous, next });
             var outOfStream = (current.speedy.stream == TEXT_STREAM.OUT);
             if (outOfStream) {
                 next.startProperties[0].remove();
@@ -1498,12 +1510,15 @@
                 .filter(function (sp) { return sp.endNode == current && sp.startNode == next; })
                 .forEach(function (single) { remove(_.data.properties, single); });
             next.remove();
+          }
+
             this.setCarotByNode(current);
         };
         Editor.prototype.getCurrent = function () {
             var sel = window.getSelection();
+            //console.log('getCurrent selection:', sel);
             var current = sel.anchorNode.parentElement;
-            if (sel.anchorOffset == 0) {
+            if (sel.anchorOffset == 0 && current.previousElementSibling) {
                 current = current.previousElementSibling;
             }
             return current;
@@ -1511,14 +1526,20 @@
         Editor.prototype.getCurrentTEST = function () {
             var sel = window.getSelection();
             // var current = sel.anchorNode.parentElement;
+            if(this.container.children.length === 0) {
+              return { node: null };
+            }
 
             var current = this.getParentSpan(sel.anchorNode);
-            if (sel.anchorOffset == 0) {
+            if (sel.anchorOffset == 0 && !current.previousElementSibling) {
+              return { node: null };
+            }
+            if (sel.anchorOffset == 0 && current.previousElementSibling)  {
                 current = current.previousElementSibling;
             }
+            //console.log('selection:', current);
             return {
-                node: current,
-                offset: sel.anchorOffset
+                node: current
             };
         };
         Editor.prototype.deleteRange = function (range) {
@@ -1750,7 +1771,7 @@
                 //if (node && this.container.contains(node) && this.container != node) {
                 //    this.setCarotByNode(node);
                 //    this.updateCurrentRanges();
-                //}                
+                //}
                 //evt.preventDefault();
                 //return;
             }
@@ -1816,7 +1837,7 @@
                     this.createProperty(propertyTypeName);
                     processed = true;
                 }
-            }            
+            }
             return processed;
         };
         Editor.prototype.processSelectionOverwrite = function (data) {
@@ -1864,15 +1885,15 @@
                 return true;
             }
             if (key == RIGHT_ARROW || key == LEFT_ARROW/*|| key == DOWN_ARROW || key == UP_ARROW*/) {
-                this.processArrows({ key, event: evt, current });
-                evt.preventDefault();
+                //this.processArrows({ key, event: evt, current });
+                //evt.preventDefault();
                 return;
             }
             if (evt.ctrlKey || evt.metaKey || evt.keyCode == ESCAPE) {
                 var processed = this.processControlOrMeta({ event: evt, current });
                 if (processed) {
                     evt.preventDefault();
-                }   
+                }
                 return;
             }
             if (false == canEdit) {
@@ -1985,9 +2006,9 @@
         Editor.prototype.handleSpecialChars = function (span, charCode) {
             if (charCode == ENTER) {
                 //span.speedy.role = ELEMENT_ROLE.CHAR;
-                span.textContent = String.fromCharCode(13);
-                span.classList.add("line-break");
-                span.speedy.isLineBreak = true;
+                span.textContent = String.fromCharCode(10);
+                //span.classList.add("line-break");
+                //span.speedy.isLineBreak = true;
             }
             if (charCode == TAB) {
                 span.textContent = String.fromCharCode(TAB);
@@ -2009,18 +2030,24 @@
             }
         };
         Editor.prototype.setCarotByNode = function (node) {
+            let offset = 0;
             if (!node) {
                 return;
+            }
+            if(node.nextElementSibling) {
+              node = node.nextElementSibling;
+            } else {
+              offset = 1;
             }
             var selection = document.getSelection();
             var range = document.createRange();
             var textNode = this.getTextNode(node);
-            range.setStart(textNode, 1);
+            range.setStart(textNode, offset);
             range.collapse(true);
-            //console.log({ node, range });
+            // console.log('setCarotByNode:', { node, range });
             if (selection.setBaseAndExtent) {
-                var startOffset = 1;    // range.startOffset;
-                var endOffset = 1;      // range.endOffset;
+                var startOffset = offset;    // range.startOffset;
+                var endOffset = offset;      // range.endOffset;
                 selection.setBaseAndExtent(range.startContainer, startOffset, range.endContainer, endOffset);
             } else {
                 selection.removeAllRanges();
@@ -2051,23 +2078,35 @@
             return node;
         };
         Editor.prototype.getSelectionNodes = function () {
-            var range = window.getSelection().getRangeAt(0);
+            const selection = window.getSelection();
+            if(selection.rangeCount === 0) {
+                return null;
+            }
+
+            const range = selection.getRangeAt(0);
             if (range.collapsed) {
                 return null;
             }
-            console.log({ range });
-            var startContainer = range.startContainer;
-            var endContainer = range.endContainer;
-            //if (range.startOffset == 1 && !range.startContainer.speedy) {
-            //    startContainer = range.startContainer.parentElement.nextElementSibling;
-            //}
-            //if (range.endOffset == 0 && !range.endContainer.speedy) {
-            //    endContainer = range.endContainer.parentElement.previousElementSibling;
-            //}
-            console.log({ range, startContainer, endContainer });
-            var startNode = getParent(startContainer, x => x.speedy && x.speedy.role == ELEMENT_ROLE.CHAR);
-            var endNode = getParent(endContainer, x => x.speedy && x.speedy.role == ELEMENT_ROLE.CHAR);
-            console.log({ startContainer, endContainer, startNode, endNode });
+
+            // check if selection is completely inside speedy
+            const speedy = getParent(range.commonAncestorContainer, x => x === this.container);
+            if(speedy === null) {
+              return null;
+            }
+            //console.log('selection range:', range);
+
+            let startNode = getParent(range.startContainer, x => x.speedy && x.speedy.role == ELEMENT_ROLE.CHAR);
+            let endNode = getParent(range.endContainer, x => x.speedy && x.speedy.role == ELEMENT_ROLE.CHAR);
+
+            if(range.startOffset === 1) {
+              startNode = startNode.nextElementSibling;
+            }
+            if(range.endOffset === 0) {
+              endNode = endNode.previousElementSibling;
+            }
+
+            //console.log({ range, startContainer, endContainer });
+            //console.log({ startContainer, endContainer, startNode, endNode });
             return {
                 start: startNode,
                 end: endNode
@@ -2311,7 +2350,7 @@
                 text: text,
                 properties: this.toPropertyNodes()
             };
-            console.log({ unbind: result });
+            //console.log({ unbind: result });
             return result;
         };
         Editor.prototype.unbindText = function () {
@@ -2338,13 +2377,13 @@
             }
             this.data.properties = [];
             var len = this.data.text.length;
-            console.log("Text length", len);
+            //console.log("Text length", len);
             var properties = model.properties.filter(item => !item.isZeroPoint)
                 .sort((a, b) => a.index > b.index ? 1 : a.index < b.index ? -1 : 0);
             var propertiesLength = properties.length;
             for (var i = 0; i < propertiesLength; i++) {
                 var p = properties[i];
-                console.log("Property", p);
+                //console.log("Property", p);
                 var type = this.propertyType[p.type];
                 if (!type) {
                     console.warn("Property type not found.", p);
@@ -2444,10 +2483,10 @@
             // Work backwards through the list of zero properties so we don't fetch a SPAN that hasn't been offset from a previous insertion.
             zeroProperties = zeroProperties.sort((a, b) => a.startIndex > b.startIndex ? -1 : a.startIndex < b.startIndex ? 1 : 0);
             var zeroPropertiesLength = zeroProperties.length;
-            console.log({ zeroProperties });
+            //console.log({ zeroProperties });
             for (var i = 0; i < zeroPropertiesLength; i++) {
                 var p = zeroProperties[i];
-                console.log("Zero-point property", p);
+                //console.log("Zero-point property", p);
                 var pt = this.propertyType[p.type];
                 if (!pt) {
                     console.warn("Property type not found.", p);
