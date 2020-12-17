@@ -483,7 +483,9 @@
         var i = indexOf(arr, function (x) { return x == item; });
         if (i > -1) {
             arr.splice(i, 1);
+            return true;
         }
+        return false;
     }
 
     function unsetSpanRange(span, className) {
@@ -1458,7 +1460,13 @@
                   if (previous.endProperties.length) {
                       previous.endProperties
                           .filter(function (ep) { return ep.startNode == next && ep.endNode == previous; })
-                          .forEach(function (single) { remove(_.data.properties, single); });
+                          .forEach(function (single) {
+                              const removed = remove(_.data.properties, single);
+                              if(removed && single.editor.onPropertyDeleted) {
+                                  single.isDeleted = true;
+                                  _.editor.onPropertyDeleted(single);
+                              }
+                            });
                   }
               }
               current.remove();
