@@ -1203,11 +1203,11 @@
         };
         Editor.prototype.updateCurrentRanges = function (span) {
             var _this = this;
-            window.setTimeout(function () {
+            //window.setTimeout(function () {
                 if (!span) {
                     span = _this.getCurrent();
                 }
-                _this.setMonitor([]);
+                //_this.setMonitor([]);
                 if (!_this.marked) {
                     markNodesWithIndexes(_this.container.firstChild);
                     _this.data.properties.sort((a, b) => a.startIndex() > b.endIndex() ? 1 : a.startIndex() == b.startIndex() ? -1 : 0);
@@ -1226,7 +1226,7 @@
                     return 0;
                 });
                 _this.setMonitor(props || []);
-            }.bind(this), 1);
+            //}.bind(this), 1);
         };
         Editor.prototype.deleteAnnotation = function (type) {
             var current = this.getCurrent();
@@ -1240,9 +1240,9 @@
         };
         Editor.prototype.setMonitor = function (props) {
             var _this = this;
-            window.setTimeout(function () {
+            //window.setTimeout(function () {
                 _this.monitors.forEach(x => x.update({ properties: props, characterCount: _this.characterCount, editor: _this }));
-            }, 1);
+            //}, 1);
         };
         Editor.prototype.handleMouseClickEvent = function (evt) {
             this.updateCurrentRanges();
