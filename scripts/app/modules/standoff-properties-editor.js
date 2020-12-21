@@ -1446,7 +1446,7 @@
                       });
                       current.startProperties.length = 0;
                   }
-                  if (current.endProperties.length) {
+                  if (current !== previous && current.endProperties.length) {
                       current.endProperties.forEach(function (prop) {
                           prop.endNode = previous;
                           if (previous) {
