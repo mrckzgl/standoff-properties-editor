@@ -1464,7 +1464,7 @@
                               const removed = remove(_.data.properties, single);
                               if(removed && single.editor.onPropertyDeleted) {
                                   single.isDeleted = true;
-                                  _.editor.onPropertyDeleted(single);
+                                  single.editor.onPropertyDeleted(single);
                               }
                             });
                   }
